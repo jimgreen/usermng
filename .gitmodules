@@ -1,0 +1,9 @@
+[submodule "jumpserver"]
+	path = jumpserver
+	url = https://github.com/jumpserver/jumpserver.git
+	branch = dev
+
+[submodule "jumpserver-lina"]
+	path = jumpserver-lina
+	url = https://github.com/jumpserver/lina.git
+	branch = dev
