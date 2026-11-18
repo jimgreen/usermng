@@ -85,12 +85,22 @@ CREATE TABLE IF NOT EXISTS role_permissions (
     permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
+CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
+CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name);
+CREATE INDEX IF NOT EXISTS idx_permissions_resource_action ON permissions(resource, action);
+CREATE INDEX IF NOT EXISTS idx_user_groups_group_user ON user_groups(group_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_user ON user_roles(role_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_role ON role_permissions(permission_id, role_id);
 """
 
 
 def ensure_database() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as connection:
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
         connection.executescript(SCHEMA)
         connection.execute(
             "INSERT OR IGNORE INTO users (id, username, name, comment) "
@@ -118,6 +128,7 @@ def db() -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA busy_timeout = 5000")
     try:
         yield connection
         connection.commit()
@@ -195,6 +206,41 @@ def user_record(connection: sqlite3.Connection, user_id: int) -> dict[str, Any] 
     return item
 
 
+def user_records(connection: sqlite3.Connection, user_ids: list[int]) -> list[dict[str, Any]]:
+    """Load a page of users and both relationship sets with three queries."""
+    if not user_ids:
+        return []
+    placeholders = ",".join("?" for _ in user_ids)
+    users = {
+        item["id"]: item
+        for item in rows(connection, f"SELECT * FROM users WHERE id IN ({placeholders})", tuple(user_ids))
+    }
+    for item in users.values():
+        item["is_active"] = bool(item["is_active"])
+        item["groups"] = []
+        item["roles"] = []
+    for row in rows(
+        connection,
+        f"SELECT ug.user_id, g.id, g.name FROM user_groups ug JOIN groups g ON g.id = ug.group_id WHERE ug.user_id IN ({placeholders}) ORDER BY g.name",
+        tuple(user_ids),
+    ):
+        users[row["user_id"]]["groups"].append({"id": row["id"], "name": row["name"]})
+    for row in rows(
+        connection,
+        f"SELECT ur.user_id, r.id, r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id IN ({placeholders}) ORDER BY r.name",
+        tuple(user_ids),
+    ):
+        users[row["user_id"]]["roles"].append({"id": row["id"], "name": row["name"]})
+    return [users[user_id] for user_id in user_ids if user_id in users]
+
+
+def delete_many(connection: sqlite3.Connection, table: str, ids: list[int]) -> int:
+    if table not in {"users", "groups", "roles", "permissions"}:
+        raise ValueError(table)
+    placeholders = ",".join("?" for _ in ids)
+    return connection.execute(f"DELETE FROM {table} WHERE id IN ({placeholders})", tuple(ids)).rowcount
+
+
 def page(items: list[dict[str, Any]], count: int, page_number: int, page_size: int) -> dict[str, Any]:
     return {
         "count": count,
@@ -257,6 +303,43 @@ def summary() -> dict[str, int]:
         return values
 
 
+@app.get("/api/insights")
+def insights() -> dict[str, Any]:
+    """Return compact dashboard metrics without loading full resource pages."""
+    with db() as connection:
+        total_users = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        assigned_groups = connection.execute("SELECT COUNT(DISTINCT user_id) FROM user_groups").fetchone()[0]
+        assigned_roles = connection.execute("SELECT COUNT(DISTINCT user_id) FROM user_roles").fetchone()[0]
+        groups = rows(
+            connection,
+            "SELECT g.name, COUNT(ug.user_id) AS users_count FROM groups g "
+            "LEFT JOIN user_groups ug ON ug.group_id = g.id GROUP BY g.id ORDER BY users_count DESC, g.name LIMIT 5",
+        )
+        roles = rows(
+            connection,
+            "SELECT r.name, COUNT(DISTINCT ur.user_id) AS users_count, "
+            "COUNT(DISTINCT rp.permission_id) AS permissions_count FROM roles r "
+            "LEFT JOIN user_roles ur ON ur.role_id = r.id "
+            "LEFT JOIN role_permissions rp ON rp.role_id = r.id "
+            "GROUP BY r.id ORDER BY users_count DESC, r.name LIMIT 5",
+        )
+        recent_users = rows(
+            connection,
+            "SELECT id, username, name, is_active, created_at FROM users ORDER BY created_at DESC, id DESC LIMIT 5",
+        )
+        return {
+            "coverage": {
+                "users_with_group": assigned_groups,
+                "users_without_group": max(total_users - assigned_groups, 0),
+                "users_with_role": assigned_roles,
+                "users_without_role": max(total_users - assigned_roles, 0),
+            },
+            "top_groups": groups,
+            "top_roles": roles,
+            "recent_users": recent_users,
+        }
+
+
 @app.get("/api/v1/users/profile/")
 def profile() -> dict[str, Any]:
     return {"id": 1, "username": "admin", "name": "Administrator", "is_superuser": True}
@@ -275,9 +358,9 @@ def list_users(
         where = ""
         params: list[Any] = []
         if search:
-            where = "WHERE u.username LIKE ? OR u.name LIKE ? OR u.email LIKE ?"
+            where = "WHERE (u.username LIKE ? OR u.name LIKE ? OR u.email LIKE ? OR u.comment LIKE ?)"
             token = f"%{search}%"
-            params.extend([token, token, token])
+            params.extend([token, token, token, token])
         if group_id is not None:
             where += " AND " if where else "WHERE "
             where += "EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = u.id AND ug.group_id = ?)"
@@ -297,7 +380,7 @@ def list_users(
             tuple(params + [limit, offset]),
         )
         return page(
-            [user_record(connection, item["id"]) for item in ids],
+            user_records(connection, [item["id"] for item in ids]),
             count,
             page_number,
             page_size,
@@ -355,8 +438,18 @@ def bulk_delete_users(ids: str = Query(..., description="逗号分隔的用户 I
     if not user_ids:
         raise HTTPException(400, "至少选择一个用户")
     with db() as connection:
-        placeholders = ",".join("?" for _ in user_ids)
-        connection.execute(f"DELETE FROM users WHERE id IN ({placeholders})", tuple(user_ids))
+        delete_many(connection, "users", user_ids)
+
+
+@app.patch("/api/v1/users/users/{user_id}/status/")
+def update_user_status(user_id: int, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    with db() as connection:
+        if not connection.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone():
+            raise HTTPException(404, "用户不存在")
+        if "is_active" not in payload:
+            raise HTTPException(400, "is_active 不能为空")
+        connection.execute("UPDATE users SET is_active = ? WHERE id = ?", (int(bool(payload["is_active"])), user_id))
+        return user_record(connection, user_id) or {}
 
 
 @app.get("/api/v1/users/users/{user_id}/")
@@ -406,8 +499,9 @@ def list_groups(
 ) -> dict[str, Any]:
     with db() as connection:
         token = f"%{search}%"
-        where = "WHERE g.name LIKE ?"
-        count = connection.execute("SELECT COUNT(*) FROM groups g " + where, (token,)).fetchone()[0]
+        where = "WHERE g.name LIKE ? OR g.comment LIKE ?"
+        params = (token, token)
+        count = connection.execute("SELECT COUNT(*) FROM groups g " + where, params).fetchone()[0]
         offset, limit = paging(page_number, page_size)
         order = sort_clause(sort, {"name", "created_at"})
         items = rows(
@@ -415,7 +509,7 @@ def list_groups(
             "SELECT g.*, COUNT(ug.user_id) AS users_count FROM groups g "
             "LEFT JOIN user_groups ug ON ug.group_id = g.id "
             f"{where} GROUP BY g.id ORDER BY g.{order}, g.id LIMIT ? OFFSET ?",
-            (token, limit, offset),
+            (*params, limit, offset),
         )
         for item in items:
             item["users"] = relation_ids(connection, "user_groups", "group_id", "user_id", item["id"])
@@ -481,6 +575,15 @@ def delete_group(group_id: int) -> None:
             raise HTTPException(404, "用户组不存在")
 
 
+@app.delete("/api/v1/users/groups/", status_code=204)
+def bulk_delete_groups(ids: str = Query(..., description="逗号分隔的用户组 ID")) -> None:
+    group_ids = id_list(ids)
+    if not group_ids:
+        raise HTTPException(400, "至少选择一个用户组")
+    with db() as connection:
+        delete_many(connection, "groups", group_ids)
+
+
 @app.post("/api/v1/users/groups/{group_id}/add-all-users/")
 def add_all_users_to_group(group_id: int) -> dict[str, int]:
     with db() as connection:
@@ -494,6 +597,15 @@ def add_all_users_to_group(group_id: int) -> dict[str, int]:
         return {"count": count}
 
 
+@app.post("/api/v1/users/groups/{group_id}/remove-all-users/")
+def remove_all_users_from_group(group_id: int) -> dict[str, int]:
+    with db() as connection:
+        if not connection.execute("SELECT 1 FROM groups WHERE id = ?", (group_id,)).fetchone():
+            raise HTTPException(404, "用户组不存在")
+        removed = connection.execute("DELETE FROM user_groups WHERE group_id = ?", (group_id,)).rowcount
+        return {"count": removed}
+
+
 @app.get("/api/v1/rbac/roles/")
 def list_roles(
     search: str = "",
@@ -503,7 +615,9 @@ def list_roles(
 ) -> dict[str, Any]:
     with db() as connection:
         token = f"%{search}%"
-        count = connection.execute("SELECT COUNT(*) FROM roles WHERE name LIKE ?", (token,)).fetchone()[0]
+        where = "WHERE r.name LIKE ? OR r.comment LIKE ?"
+        params = (token, token)
+        count = connection.execute("SELECT COUNT(*) FROM roles r " + where, params).fetchone()[0]
         offset, limit = paging(page_number, page_size)
         order = sort_clause(sort, {"name", "created_at"})
         items = rows(
@@ -511,8 +625,8 @@ def list_roles(
             "SELECT r.*, COUNT(DISTINCT rp.permission_id) AS permissions_count, "
             "COUNT(DISTINCT ur.user_id) AS users_count FROM roles r "
             "LEFT JOIN role_permissions rp ON rp.role_id = r.id "
-            f"LEFT JOIN user_roles ur ON ur.role_id = r.id WHERE r.name LIKE ? GROUP BY r.id ORDER BY r.{order}, r.id LIMIT ? OFFSET ?",
-            (token, limit, offset),
+            f"LEFT JOIN user_roles ur ON ur.role_id = r.id {where} GROUP BY r.id ORDER BY r.{order}, r.id LIMIT ? OFFSET ?",
+            (*params, limit, offset),
         )
         for item in items:
             item["permissions"] = relation_ids(connection, "role_permissions", "role_id", "permission_id", item["id"])
@@ -571,6 +685,15 @@ def delete_role(role_id: int) -> None:
             raise HTTPException(404, "角色不存在")
 
 
+@app.delete("/api/v1/rbac/roles/", status_code=204)
+def bulk_delete_roles(ids: str = Query(..., description="逗号分隔的角色 ID")) -> None:
+    role_ids = id_list(ids)
+    if not role_ids:
+        raise HTTPException(400, "至少选择一个角色")
+    with db() as connection:
+        delete_many(connection, "roles", role_ids)
+
+
 @app.get("/api/v1/rbac/permissions/")
 def list_permissions(
     search: str = "",
@@ -580,8 +703,8 @@ def list_permissions(
 ) -> dict[str, Any]:
     with db() as connection:
         token = f"%{search}%"
-        where = "WHERE code LIKE ? OR name LIKE ? OR resource LIKE ?"
-        params = (token, token, token)
+        where = "WHERE code LIKE ? OR name LIKE ? OR resource LIKE ? OR action LIKE ?"
+        params = (token, token, token, token)
         count = connection.execute("SELECT COUNT(*) FROM permissions " + where, params).fetchone()[0]
         offset, limit = paging(page_number, page_size)
         order = sort_clause(sort, {"code", "name", "resource", "action", "created_at"}, "code")
@@ -594,7 +717,12 @@ def list_permissions(
 
 
 @app.get("/api/export")
-def export_csv(kind: str = Query("users")) -> Response:
+def export_csv(
+    kind: str = Query("users"),
+    search: str = "",
+    is_active: bool | None = None,
+    group_id: int | None = None,
+) -> Response:
     """Export the current resource as UTF-8 CSV for handoff and backup."""
     if kind not in {"users", "groups", "roles", "permissions"}:
         raise HTTPException(400, "不支持的导出类型")
@@ -603,7 +731,20 @@ def export_csv(kind: str = Query("users")) -> Response:
         writer = csv.writer(output)
         if kind == "users":
             writer.writerow(["ID", "用户名", "姓名", "邮箱", "状态", "用户组", "角色", "备注"])
-            for item in rows(connection, "SELECT * FROM users ORDER BY name, id"):
+            clauses: list[str] = []
+            params: list[Any] = []
+            if search:
+                token = f"%{search}%"
+                clauses.append("(username LIKE ? OR name LIKE ? OR email LIKE ? OR comment LIKE ?)")
+                params.extend([token, token, token, token])
+            if is_active is not None:
+                clauses.append("is_active = ?")
+                params.append(int(is_active))
+            if group_id is not None:
+                clauses.append("EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = users.id AND ug.group_id = ?)")
+                params.append(group_id)
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            for item in rows(connection, f"SELECT * FROM users{where} ORDER BY name, id", tuple(params)):
                 full = user_record(connection, item["id"]) or item
                 writer.writerow([
                     full["id"], full["username"], full["name"], full["email"],
@@ -613,15 +754,18 @@ def export_csv(kind: str = Query("users")) -> Response:
                 ])
         elif kind == "groups":
             writer.writerow(["ID", "名称", "成员数", "说明"])
-            for item in rows(connection, "SELECT g.*, COUNT(ug.user_id) AS users_count FROM groups g LEFT JOIN user_groups ug ON ug.group_id = g.id GROUP BY g.id ORDER BY g.name"):
+            token = f"%{search}%"
+            for item in rows(connection, "SELECT g.*, COUNT(ug.user_id) AS users_count FROM groups g LEFT JOIN user_groups ug ON ug.group_id = g.id WHERE g.name LIKE ? OR g.comment LIKE ? GROUP BY g.id ORDER BY g.name", (token, token)):
                 writer.writerow([item["id"], item["name"], item["users_count"], item["comment"]])
         elif kind == "roles":
             writer.writerow(["ID", "名称", "权限数", "成员数", "说明"])
-            for item in rows(connection, "SELECT r.*, COUNT(DISTINCT rp.permission_id) AS permissions_count, COUNT(DISTINCT ur.user_id) AS users_count FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN user_roles ur ON ur.role_id = r.id GROUP BY r.id ORDER BY r.name"):
+            token = f"%{search}%"
+            for item in rows(connection, "SELECT r.*, COUNT(DISTINCT rp.permission_id) AS permissions_count, COUNT(DISTINCT ur.user_id) AS users_count FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN user_roles ur ON ur.role_id = r.id WHERE r.name LIKE ? OR r.comment LIKE ? GROUP BY r.id ORDER BY r.name", (token, token)):
                 writer.writerow([item["id"], item["name"], item["permissions_count"], item["users_count"], item["comment"]])
         else:
             writer.writerow(["ID", "编码", "名称", "资源", "动作"])
-            for item in rows(connection, "SELECT * FROM permissions ORDER BY resource, action, code"):
+            token = f"%{search}%"
+            for item in rows(connection, "SELECT * FROM permissions WHERE code LIKE ? OR name LIKE ? OR resource LIKE ? OR action LIKE ? ORDER BY resource, action, code", (token, token, token, token)):
                 writer.writerow([item["id"], item["code"], item["name"], item["resource"], item["action"]])
     return Response(
         content="\ufeff" + output.getvalue(),
@@ -664,6 +808,15 @@ def delete_permission(permission_id: int) -> None:
     with db() as connection:
         if connection.execute("DELETE FROM permissions WHERE id = ?", (permission_id,)).rowcount == 0:
             raise HTTPException(404, "权限不存在")
+
+
+@app.delete("/api/v1/rbac/permissions/", status_code=204)
+def bulk_delete_permissions(ids: str = Query(..., description="逗号分隔的权限 ID")) -> None:
+    permission_ids = id_list(ids)
+    if not permission_ids:
+        raise HTTPException(400, "至少选择一个权限")
+    with db() as connection:
+        delete_many(connection, "permissions", permission_ids)
 
 
 @app.get("/api/v1/users/users-groups-relations/")

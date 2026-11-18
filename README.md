@@ -4,11 +4,13 @@
 
 ## 功能
 
-- 用户：新增、编辑、启用/禁用、删除、搜索。
-- 用户组：定义用户组并维护成员。
+- 用户：新增、编辑、单行或批量启用/禁用、删除、搜索、状态筛选、用户组筛选。
+- 用户组：定义用户组并维护成员，支持一键加入全部用户或清空成员。
 - 角色：定义角色并绑定用户。
 - 权限：定义资源权限并绑定到角色。
-- 查询：用户、用户组、角色、权限均提供 REST API 和 Web 页面。
+- 查询：用户、用户组、角色、权限均提供 REST API 和 Web 页面，支持分页、排序、关联搜索和当前结果 CSV 导出。
+- 概览：提供数据覆盖率、最近新增用户、组/角色成员排行和快捷统计卡片。
+- 性能：SQLite 启用 WAL、busy timeout 和关系索引；用户分页关联采用批量读取，减少数据库往返。
 
 ## 启动
 
@@ -28,8 +30,13 @@ python -m uvicorn simple_server:app --host 127.0.0.1 --port 9529
 ## API
 
 - `GET /api/health`
+- `GET /api/summary`
+- `GET /api/insights`
 - `GET/POST/PATCH/DELETE /api/v1/users/users/`
+- `PATCH /api/v1/users/users/{user_id}/status/`
 - `GET/POST/PATCH/DELETE /api/v1/users/groups/`
+- `POST /api/v1/users/groups/{group_id}/add-all-users/`
+- `POST /api/v1/users/groups/{group_id}/remove-all-users/`
 - `GET/POST/PATCH/DELETE /api/v1/rbac/roles/`
 - `GET/POST/PATCH/DELETE /api/v1/rbac/permissions/`
 - `GET/POST/DELETE /api/v1/users/users-groups-relations/`
