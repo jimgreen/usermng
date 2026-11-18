@@ -12,6 +12,7 @@ import os
 import sqlite3
 import csv
 import io
+from threading import Lock
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any, Iterator
@@ -95,31 +96,41 @@ CREATE INDEX IF NOT EXISTS idx_user_roles_role_user ON user_roles(role_id, user_
 CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_role ON role_permissions(permission_id, role_id);
 """
 
+_DATABASE_READY = False
+_DATABASE_INIT_LOCK = Lock()
+
 
 def ensure_database() -> None:
+    global _DATABASE_READY
+    if _DATABASE_READY:
+        return
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as connection:
-        connection.execute("PRAGMA journal_mode = WAL")
-        connection.execute("PRAGMA synchronous = NORMAL")
-        connection.executescript(SCHEMA)
-        connection.execute(
-            "INSERT OR IGNORE INTO users (id, username, name, comment) "
-            "VALUES (1, 'admin', 'Administrator', 'Local administrator')"
-        )
-        connection.execute(
-            "INSERT OR IGNORE INTO groups (id, name, comment) "
-            "VALUES (1, 'Administrators', 'Built-in management group')"
-        )
-        connection.execute(
-            "INSERT OR IGNORE INTO roles (id, name, comment) "
-            "VALUES (1, 'Administrator', 'Full user-management access')"
-        )
-        connection.execute(
-            "INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (1, 1)"
-        )
-        connection.execute(
-            "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (1, 1)"
-        )
+    with _DATABASE_INIT_LOCK:
+        if _DATABASE_READY:
+            return
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute("PRAGMA journal_mode = WAL")
+            connection.execute("PRAGMA synchronous = NORMAL")
+            connection.executescript(SCHEMA)
+            connection.execute(
+                "INSERT OR IGNORE INTO users (id, username, name, comment) "
+                "VALUES (1, 'admin', 'Administrator', 'Local administrator')"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO groups (id, name, comment) "
+                "VALUES (1, 'Administrators', 'Built-in management group')"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO roles (id, name, comment) "
+                "VALUES (1, 'Administrator', 'Full user-management access')"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES (1, 1)"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (1, 1)"
+            )
+        _DATABASE_READY = True
 
 
 @contextmanager
