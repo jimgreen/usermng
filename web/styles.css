@@ -1,0 +1,96 @@
+:root { color: #172033; background: #f4f7fb; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      a { color: inherit; }
+      header { align-items: center; background: linear-gradient(120deg, #162b4d, #23518f); color: #fff; display: flex; justify-content: space-between; padding: 20px clamp(18px, 4vw, 48px); }
+      header h1 { font-size: 22px; margin: 0 0 4px; }
+      header p, header small { color: #dbeafe; font-size: 13px; margin: 0; }
+      main { margin: 24px auto 50px; max-width: 1360px; padding: 0 18px; }
+      .site-nav { background: #fff; border-bottom: 1px solid #e5eaf2; display: flex; gap: 4px; overflow-x: auto; padding: 8px clamp(18px, 4vw, 48px); }
+      .site-nav a { border-radius: 7px; color: #475569; font-size: 14px; padding: 9px 14px; text-decoration: none; white-space: nowrap; }
+      .site-nav a:hover, .site-nav a.active { background: #eff6ff; color: #1d4ed8; }
+      .site-nav a.active { font-weight: 700; }
+      .page-head { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
+      .page-head h2 { font-size: 20px; margin: 0 0 4px; }
+      .page-head p { color: #64748b; font-size: 13px; margin: 0; }
+      .muted-link { color: #2563eb; font-size: 13px; padding: 5px 0; text-decoration: none; }
+      button, input, select, textarea { font: inherit; }
+      button { border: 0; border-radius: 7px; cursor: pointer; padding: 9px 14px; transition: .15s ease; }
+      button:hover:not(:disabled) { filter: brightness(.96); transform: translateY(-1px); }
+      button:disabled { cursor: not-allowed; opacity: .5; }
+      button.primary { background: #2563eb; color: #fff; }
+      button.success { background: #059669; color: #fff; }
+      button.danger { background: #dc2626; color: #fff; }
+      button.muted { background: #e8edf4; color: #334155; }
+      .summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 18px; }
+      .metric { background: #fff; border: 1px solid #e5eaf2; box-shadow: 0 4px 16px #16345b0c; color: #172033; display: block; min-height: 94px; padding: 15px; text-align: left; text-decoration: none; }
+      .metric:hover { border-color: #93c5fd; }
+      .metric strong { display: block; font-size: 25px; margin-top: 8px; }
+      .metric span { color: #64748b; font-size: 13px; }
+      .dashboard-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
+      .panel { background: #fff; border: 1px solid #e5eaf2; border-radius: 12px; box-shadow: 0 4px 16px #16345b0c; min-height: 170px; padding: 16px; }
+      .panel h2 { font-size: 15px; margin: 0; }
+      .panel-head { align-items: center; display: flex; justify-content: space-between; margin-bottom: 13px; }
+      .panel-head small { color: #64748b; font-size: 12px; }
+      .coverage-row { align-items: center; display: grid; gap: 8px; grid-template-columns: 76px 1fr 42px; margin: 10px 0; }
+      .coverage-row label, .coverage-row strong { font-size: 12px; }
+      .coverage-track { background: #e8eef7; border-radius: 999px; height: 8px; overflow: hidden; }
+      .coverage-track i { background: linear-gradient(90deg, #2563eb, #60a5fa); border-radius: inherit; display: block; height: 100%; }
+      .mini-list { display: grid; gap: 7px; margin: 0; padding: 0; }
+      .mini-list li { align-items: center; display: flex; font-size: 13px; justify-content: space-between; list-style: none; }
+      .mini-list li span:last-child { color: #64748b; font-size: 12px; }
+      .mini-list .status { margin-left: 6px; }
+      .list-kind { background: #dbeafe; border-radius: 4px; color: #1d4ed8; font-size: 10px; font-style: normal; margin-right: 6px; padding: 2px 4px; }
+      .list-kind.role-kind { background: #ede9fe; color: #6d28d9; }
+      .panel-empty { color: #94a3b8; font-size: 13px; padding: 18px 0; text-align: center; }
+      .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+      .tab { background: #e4eaf3; color: #334155; }
+      .tab.active { background: #2563eb; color: #fff; }
+      .card { background: #fff; border: 1px solid #e5eaf2; border-radius: 12px; box-shadow: 0 4px 16px #16345b0c; padding: 18px; }
+      .toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+      .toolbar .search { flex: 1 1 280px; }
+      input, select, textarea { background: #fff; border: 1px solid #cbd5e1; border-radius: 7px; color: #172033; padding: 9px 10px; width: 100%; }
+      .toolbar input, .toolbar select { width: auto; }
+      .toolbar select { min-width: 125px; }
+      .toolbar .filter-wide { min-width: 160px; }
+      .filter-clear { color: #2563eb; font-size: 12px; padding: 6px 8px; }
+      .selection-bar { align-items: center; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; margin-bottom: 12px; padding: 8px 10px; }
+      .selection-bar span { color: #1e40af; font-size: 13px; }
+      .selection-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      .table-wrap { overflow-x: auto; }
+      table { border-collapse: collapse; min-width: 760px; width: 100%; }
+      th, td { border-bottom: 1px solid #edf0f5; padding: 11px 8px; text-align: left; vertical-align: middle; }
+      th { color: #64748b; font-size: 13px; font-weight: 600; white-space: nowrap; }
+      td { font-size: 14px; }
+      tr:hover td { background: #fafcff; }
+      .checkbox { accent-color: #2563eb; height: 16px; width: 16px; }
+      .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      .actions button { font-size: 12px; padding: 6px 9px; }
+      .badge { background: #e0e7ff; border-radius: 999px; color: #3730a3; display: inline-block; font-size: 12px; margin: 2px; padding: 3px 8px; }
+      .status { border-radius: 999px; display: inline-block; font-size: 12px; padding: 3px 9px; }
+      .status.on { background: #dcfce7; color: #166534; }
+      .status.off { background: #fee2e2; color: #991b1b; }
+      .muted { color: #64748b; }
+      .empty { padding: 40px 10px; text-align: center; }
+      .pager { align-items: center; display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+      .pager span { color: #64748b; font-size: 13px; }
+      .loading { color: #2563eb; font-size: 13px; margin-left: 4px; }
+      .modal { align-items: center; background: #0f172a66; display: none; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 5; }
+      .modal.open { display: flex; }
+      .dialog { background: #fff; border-radius: 12px; max-height: 92vh; overflow: auto; padding: 24px; width: min(700px, 100%); }
+      .dialog h2 { margin: 0 0 18px; }
+      .field { margin: 13px 0; }
+      .field > label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+      .field textarea { min-height: 76px; resize: vertical; }
+      .checks { border: 1px solid #e2e8f0; border-radius: 7px; display: grid; gap: 5px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); max-height: 190px; overflow: auto; padding: 10px; }
+      .checks label { font-size: 13px; font-weight: 400; }
+      .checks-tools { align-items: center; display: flex; gap: 6px; margin-bottom: 6px; }
+      .checks-tools input { flex: 1; padding: 7px 8px; }
+      .checks-tools button { font-size: 12px; padding: 6px 8px; }
+      .check-option.is-hidden { display: none; }
+      code { background: #f1f5f9; border-radius: 4px; color: #334155; padding: 2px 5px; }
+      .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+      #message { background: #172b4d; border-radius: 7px; bottom: 20px; box-shadow: 0 4px 18px #0003; color: #fff; display: none; padding: 11px 15px; position: fixed; right: 20px; z-index: 10; }
+      @media (max-width: 1050px) { .summary-grid, .dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (max-width: 760px) { .dashboard-grid { grid-template-columns: 1fr; } }
+      @media (max-width: 620px) { header { align-items: flex-start; flex-direction: column; gap: 8px; } .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .toolbar input, .toolbar select { flex: 1 1 140px; width: 100%; } main { margin-top: 16px; padding: 0 10px; } }\n

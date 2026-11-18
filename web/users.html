@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>用户管理</title><link rel="stylesheet" href="/ui/styles.css" /></head>
+  <body data-page="users">
+    <header><div><h1 id="pageTitle">用户管理</h1><p id="pageDescription">维护用户资料、状态、用户组和角色关系</p></div><small id="health">连接检查中…</small></header>
+    <nav class="site-nav"><a href="/ui/" data-page="dashboard">仪表盘</a><a href="/ui/users/" data-page="users">用户 <span data-nav-count="users"></span></a><a href="/ui/groups/" data-page="groups">用户组 <span data-nav-count="groups"></span></a><a href="/ui/roles/" data-page="roles">角色 <span data-nav-count="roles"></span></a><a href="/ui/permissions/" data-page="permissions">权限 <span data-nav-count="permissions"></span></a></nav>
+    <main><div class="page-head"><div><h2>用户列表</h2><p>支持状态、用户组筛选和批量处理</p></div><a class="muted-link" href="/ui/">返回仪表盘</a></div><section class="card"><div class="toolbar"><input class="search" id="search" placeholder="搜索用户名、姓名、邮箱或备注…（按 / 聚焦）" /><select id="statusFilter"><option value="all">全部状态</option><option value="active">仅启用</option><option value="inactive">仅禁用</option></select><select class="filter-wide" id="groupFilter"><option value="">全部用户组</option></select><select id="sort"></select><select id="pageSize"><option value="20">每页 20</option><option value="50">每页 50</option><option value="100">每页 100</option></select><button class="filter-clear" id="clearFilters">清除筛选</button><button class="primary" id="add">新增用户</button><button class="muted" id="export">导出当前结果</button><button class="muted" id="refresh">刷新</button><span class="loading" id="loading"></span></div><div class="selection-bar" id="selectionBar" hidden><span id="selectionInfo"></span><div class="selection-actions" id="selectionActions"></div></div><div class="table-wrap" id="table"></div><div class="pager" id="pager"></div></section></main>
+    <div class="modal" id="modal"><div class="dialog"><h2 id="form-title">新增用户</h2><form id="form"></form></div></div><div id="message"></div><script src="/ui/app.js" defer></script>
+  </body>
+</html>

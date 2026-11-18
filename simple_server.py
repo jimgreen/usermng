@@ -24,6 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 ROOT = Path(__file__).resolve().parent
 WEB_FILE = ROOT / "web" / "index.html"
+WEB_DIR = ROOT / "web"
+PAGE_FILES = {
+    "users": WEB_DIR / "users.html",
+    "groups": WEB_DIR / "groups.html",
+    "roles": WEB_DIR / "roles.html",
+    "permissions": WEB_DIR / "permissions.html",
+}
 DB_PATH = Path(
     os.getenv(
         "USERMNG_DB_PATH",
@@ -291,6 +298,36 @@ def startup() -> None:
 @app.get("/ui/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(WEB_FILE)
+
+
+@app.get("/ui/users/", include_in_schema=False)
+def users_page() -> FileResponse:
+    return FileResponse(PAGE_FILES["users"])
+
+
+@app.get("/ui/groups/", include_in_schema=False)
+def groups_page() -> FileResponse:
+    return FileResponse(PAGE_FILES["groups"])
+
+
+@app.get("/ui/roles/", include_in_schema=False)
+def roles_page() -> FileResponse:
+    return FileResponse(PAGE_FILES["roles"])
+
+
+@app.get("/ui/permissions/", include_in_schema=False)
+def permissions_page() -> FileResponse:
+    return FileResponse(PAGE_FILES["permissions"])
+
+
+@app.get("/ui/styles.css", include_in_schema=False)
+def styles() -> Response:
+    return FileResponse(WEB_DIR / "styles.css", media_type="text/css")
+
+
+@app.get("/ui/app.js", include_in_schema=False)
+def app_script() -> Response:
+    return FileResponse(WEB_DIR / "app.js", media_type="application/javascript")
 
 
 @app.get("/api/health")
